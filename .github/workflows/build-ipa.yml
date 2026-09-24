@@ -1,0 +1,40 @@
+name: Build IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unzip project bundle
+        run: unzip -q *.zip -d project
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: project/ios
+        run: xcodegen generate
+      - name: Build app (unsigned)
+        working-directory: project/ios
+        run: |
+          xcodebuild -project GooseGang.xcodeproj -scheme GooseGang \
+            -configuration Release -sdk iphoneos -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build
+      - name: Package IPA
+        working-directory: project/ios
+        run: |
+          APP="build/Build/Products/Release-iphoneos/GooseGang.app"
+          test -d "$APP"
+          rm -rf ipa_stage && mkdir -p ipa_stage/Payload
+          cp -R "$APP" ipa_stage/Payload/
+          cd ipa_stage && zip -qry ../GooseGang.ipa Payload
+          cd .. && rm -rf ipa_stage
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GooseGang-ipa
+          path: project/ios/GooseGang.ipa
+          if-no-files-found: error
